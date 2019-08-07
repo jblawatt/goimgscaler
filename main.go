@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -34,11 +35,6 @@ func MustInt(input string, default_ int) int {
 	} else {
 		return value
 	}
-}
-
-var InterpolationList = map[int]imaging.ResampleFilter{
-	0: imaging.Lanczos,
-	1: imaging.BSpline,
 }
 
 type ImageMethod int
@@ -115,7 +111,7 @@ const (
 
 func GetResampleFilter(input ResampleFilter) (imaging.ResampleFilter, error) {
 	if int(endRF) < int(input) {
-		return imaging.ResampleFilter{}, NewBadRequest(fmt.Sprintf("Invalid resample filter: %s", input))
+		return imaging.ResampleFilter{}, NewBadRequest(fmt.Sprintf("Invalid resample filter: %d", input))
 	}
 	switch input {
 	case NearestNeighbor:
@@ -214,6 +210,7 @@ func applyImage(
 }
 
 func imageHandler(w http.ResponseWriter, r *http.Request) {
+
 	filename := r.URL.Query().Get("f")
 
 	anchor := MustInt(r.URL.Query().Get("a"), 0)
@@ -236,8 +233,33 @@ func imageHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+type FileNotFound struct {
+	Filename string
+}
+
+func (f FileNotFound) Error() string {
+	return fmt.Sprintf("File not found: %s", f.Filename)
+}
+
+type BadRequest struct {
+	Message string
+}
+
+func (b BadRequest) Error() string {
+	return b.Message
+}
+
+func NewBadRequest(message string) BadRequest {
+	return BadRequest{message}
+}
+
 func main() {
-	http.HandleFunc("/", imageHandler)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s -- [%s] -- %s %s -- %d",
+			time.Now().UTC().Format("2006-01-02T15:04:05.999Z"),
+			r.Method, r.URL.Path, r.URL.Query().Encode(), r.ContentLength)
+		imageHandler(w, r)
+	})
 	// TODO: /list
 
 	viper.SetDefault("cache_dir", "_cache")
